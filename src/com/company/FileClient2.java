@@ -28,6 +28,7 @@ public class FileClient2 {
     }
 
     void receiveFile(DataInputStream in, String filename) throws IOException {
+        System.out.println("Receiving...");
         byte[] buffer = new byte[1024];
         long count = 0, size;
         int len;

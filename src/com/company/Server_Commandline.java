@@ -6,10 +6,11 @@ import java.util.Scanner;
 
 public class Server_Commandline {
     public Server_Commandline(int port,int password) throws IOException{
+//        /str 127.0.0.1 8899 26151851
         System.out.println("Running ....");
+        ServerSocket sSocket = new ServerSocket(port);
+        System.out.println("Server start successful...in port"+port);
         while (true) {
-            ServerSocket sSocket = new ServerSocket(port);
-            System.out.println("Server start successful...in port"+port);
             Socket cSocket = sSocket.accept();
             try{
                 serve(cSocket);
@@ -47,6 +48,7 @@ public class Server_Commandline {
     }
 
     private void sendFile(DataOutputStream out, String filename) throws IOException {
+        System.out.println("Sending file...");
         byte[] buffer = new byte[1024];
         File file = new File(filename);
         FileInputStream fin = new FileInputStream(file);
@@ -62,6 +64,7 @@ public class Server_Commandline {
             count += len;
         }
         fin.close();
+        System.out.println("Out...");
     }
 
     public static void main(String[] args) throws IOException {
