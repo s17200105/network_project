@@ -7,20 +7,15 @@ import java.util.Scanner;
 public class Server_Commandline {
     public Server_Commandline(int port,int password) throws IOException{
         System.out.println("Running ....");
-        ServerSocket sSocket = new ServerSocket(port);
-        System.out.println("Server start successful...in port"+port);
         while (true) {
+            ServerSocket sSocket = new ServerSocket(port);
+            System.out.println("Server start successful...in port"+port);
             Socket cSocket = sSocket.accept();
-            Thread t = new Thread(){
-              @Override
-              public void run(){
-                  try{
-                      serve(cSocket);
-                  }catch(IOException e){
-                      e.printStackTrace();
-                  }
-              }
-            };
+            try{
+                serve(cSocket);
+            }catch(IOException e){
+                e.printStackTrace();
+            }
         }
     }
 
@@ -45,6 +40,8 @@ public class Server_Commandline {
             count += len;
             str += new String(buffer, 0, len);
         }
+
+        System.out.println("Receive msg: "+str);
 
         return str;
     }
