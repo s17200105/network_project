@@ -1,123 +1,179 @@
 package com.company;
 import java.io.*;
+import java.rmi.server.ExportException;
 import java.util.*;
+import java.net.Socket;
 import java.text.SimpleDateFormat;
 
 
 public class CommandPrompt {
+    private String ip,password,location;
+    private int port;
+    private Socket socket;
+    private DataInputStream in;
+    private DataOutputStream out;
+    public CommandPrompt(String ip,int port,String password,String location){
+        File currentDir = new File(".");
+        this.ip = ip;
+        this.port=port;
+        this.password=password;
+        this.location = location;
+    }
 
-    public File currentDir = new File(".");
+    public CommandPrompt(){}
 
-    public void exec(String statement)throws IOException {
-        String command = "";
-        String option = "";
-        String msg = "";
-
-        int endIdx = statement.trim().indexOf(' ');
-        if (endIdx > 0) {
-            command = statement.substring(0, endIdx).trim();
-            option = statement.substring(endIdx + 1).trim();
-        } else {
-            command = statement;
-        }
-
-        switch (command.toLowerCase()) {
-            case "cd":
-                changeDir(option);
-                break;
-            case "dir":
-                listFiles(option);
-                break;
-            case "freespace":
-                msg = String.format("The free space is %,d bytes.", checkFreespace(option));
-                System.out.println(msg);
-                break;
-            default:
-                msg = String.format("'%s' is not recognized as an command.", command);
-                System.out.println(msg);
-                break;
+    private boolean check_permission() throws IOException{
+        String status;
+        try{
+            socket = new Socket(ip, port);
+            in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
+            sendMsg(out,"007 "+password);
+            status = receiveText(in);
+            socket.close();
+            if(!status.equals("Success")){
+                System.out.println("*Please enter correct ip,port or password*");
+                return false;
+            }
+            System.out.println("Server connect successful");
+            return true;
+        }catch (Exception e){
+            return false;
         }
     }
 
-
-    private void listFiles(String path) {
-        File dir;
-
-        if (path == null)
-            dir = currentDir;
-        else
-            dir = new File(path);
-
-        if (!dir.exists()) {
-            System.out.println("File / directory does not exist.\n" + dir);
-            return;
+    private void exec(String cmd,String sentence)throws IOException, InterruptedException {
+        socket = new Socket(ip, port);
+        in = new DataInputStream(socket.getInputStream());
+        out = new DataOutputStream(socket.getOutputStream());
+        String [] statement = sentence.split(" ");
+        String command=cmd;
+        for (String s:statement) {
+            if(!s.equals(statement[0])){
+                command += " "+s;
+            }
         }
-
-        if (dir.isFile())
-            System.out.println(getInfo(dir));
-        else
-        {
-            File[] fileList = dir.listFiles();
-            String info = "";
-            for (int i = 0; i < fileList.length; i++)
-                info += getInfo(fileList[i]) + "\n";
-            System.out.println(info);
-        }
+        switch(cmd) {
+            case "004":
+                sendMsg(out,command);
+                for (String filename:statement) {
+                    if(!filename.equals("/dl")){
+                        receiveFile(in,filename);
+                        System.out.print(filename+" ");
+                    }
+                }
+                System.out.println("download success");
+                break;
+            case "005":
+                sendMsg(out,command);
+                String files = receiveText(in);
+                exec("004","/dl "+files);
+                break;
+            case "002":
+                sendMsg(out,command);
+                location=ip+"\\"+receiveText(in);
+                break;
+            case "003":
+                sendMsg(out,command);
+                System.out.println(receiveText(in));
+                break;
+        };
+        socket.close();
     }
 
-    private String getInfo(File f) {
-        Date date = new Date(f.lastModified());
-        String ld = new SimpleDateFormat("MMM dd, yyyy").format(date);
-        if (f.isFile()) {
-            return String.format("%dKB\t%s\t%s", (int) Math.ceil((float) f.length() / 1024), ld, f.getName());
-        } else
-            return String.format("<DIR>\t%s\t%s", ld, f.getName());
+    private void sendMsg(DataOutputStream out,String cmd) throws IOException {
+        int size = cmd.length();
+        out.writeInt(size);
+        out.write(cmd.getBytes());
+        System.out.println("Processing...");
     }
 
-    private long checkFreespace(String path) throws IOException {
-        File dir;
-        if (path == null)
-            dir = currentDir;
-        else if (path.startsWith("/") || path.startsWith("\\") || path.contains(":"))
-            dir = new File(path);
-        else
-            dir = new File(currentDir.getCanonicalPath() + "/" + path);
+    private void receiveFile(DataInputStream in, String filename) throws IOException {
+        byte[] buffer = new byte[1024];
+        long count = 0, size;
+        int len;
+        File file;
+        FileOutputStream fout;
+        file = new File("downloadfile/"+filename);
+        fout = new FileOutputStream(file);
 
-        return dir.getFreeSpace();
+        size = in.readLong();
+        count = 0;
+
+        while (count < size) {
+            len = in.read(buffer, 0, (int) Math.min(buffer.length, size - count));
+            count += len;
+            fout.write(buffer, 0, len);
+        }
+        fout.close();
     }
 
-    private void changeDir(String path) throws IOException {
-        if (path == null) {
-            System.out.println(currentDir.getCanonicalPath());
-            return;
+    private String receiveText(DataInputStream in) throws IOException {
+        long count = 0;
+        int len,size;
+        size = in.readInt();
+        byte[] buffer = new byte[size];
+        count = 0;
+        while (count < size) {
+            len = in.read(buffer, buffer.length - size, size);;
+            size -= len;
         }
+        return new String(buffer);
+    }
 
-        File dir;
-        if (path.startsWith("/") || path.startsWith("\\") || path.contains(":"))
-            dir = new File(path);
-        else
-            dir = new File(currentDir.getCanonicalPath() + "/" + path);
-
-        if (!dir.exists() || dir.isFile()) {
-            System.out.println("The system cannot find the path specified.");
-            return;
-        }
-
-        currentDir = dir;
-        System.out.println("cd to "+dir);
+    private String getLocation(){
+        return location;
     }
 
     public static void main(String[] args) throws IOException {
         Scanner scanner = new Scanner(System.in);
-        String statement;
+        String [] input;
+        String statement,password="",ip="",cmd="";
+        String location = "";
         CommandPrompt prompt = new CommandPrompt();
+        int port=0;
+
+        while (!prompt.check_permission()){
+            System.out.println("*Please finish connection setting because using system*");
+            statement = scanner.nextLine();
+            if(statement.split(" ")[0].equals("/conn")){
+                input = statement.split(" ");
+                ip = input[1];
+                port = Integer.parseInt(input[2]);
+                password = input[3];
+            }
+            location = ip+"\\sharefile";
+            prompt = new CommandPrompt(ip,port,password,location);
+        }
 
         while (true) {
-            System.out.print("ip address/>");
-            statement = scanner.nextLine().trim();
-            if (statement.equalsIgnoreCase("/exit"))
-                break;
-            prompt.exec(statement);
+            try {
+                location = prompt.getLocation();
+                System.out.print(location + "\\>");
+                statement = scanner.nextLine().trim();
+                if (statement.equalsIgnoreCase("/exit")) {
+                    System.out.println("Disconnecting...");
+                    System.out.println("Exit the program,see you again.");
+                    break;
+                }
+                switch (statement.split(" ")[0]) {
+                    case "/cd":
+                        cmd = "002";
+                        break;
+                    case "/ls":
+                        cmd = "003";
+                        break;
+                    case "/dl":
+                        cmd = "004";
+                        break;
+                    case "/dla":
+                        cmd = "005";
+                        break;
+                }
+                prompt.exec(cmd, statement);
+            }catch(Exception e){
+                return;
+            }
         }
         scanner.close();
     }
